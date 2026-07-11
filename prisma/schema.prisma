@@ -1,0 +1,58 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+model Producto {
+  id String @id @default(uuid())  
+  precio Float
+  nombre String
+  imagen String?
+  descripcion String?
+  codigo_barras String @unique
+
+  stock Almacen?
+
+  venta_por_producto Venta_Por_Producto[]
+}
+
+model Almacen {
+  id String @id @default(uuid())  
+  cantidad Int  
+  producto_id String @unique
+
+  producto Producto @relation(fields: [producto_id],references: [id])
+
+}
+
+
+
+model Venta {
+ id String @id @default(uuid())
+ total Float
+ productos Venta_Por_Producto[]
+
+}
+
+model Venta_Por_Producto {
+id String @id @default(uuid())
+venta_id String
+precio Float
+cantidad Int
+producto_id String
+venta Venta @relation(fields: [venta_id],references: [id])
+
+producto Producto @relation(fields: [producto_id],references:[id])
+
+}
