@@ -32,7 +32,7 @@ model Almacen {
   cantidad Int  
   producto_id String @unique
 
-  producto Producto @relation(fields: [producto_id],references: [id])
+  producto Producto @relation(fields: [producto_id],references: [id],onDelete: Cascade)
 
 }
 

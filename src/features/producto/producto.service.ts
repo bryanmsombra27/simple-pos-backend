@@ -12,29 +12,55 @@ import type {
 import { PaginationDto } from '../../common/pagination.dto';
 import { PrismaService } from 'src/services/prisma/prisma.service';
 import { Prisma, Producto } from 'generated/prisma/client';
-
+import { type Express } from 'express';
+import {
+  CloudinaryResponse,
+  CloudinaryService,
+} from 'src/cloudinary/cloudinary.service';
 @Injectable()
 export class ProductoService {
-  constructor(private readonly prismaService: PrismaService) {}
+  private include: Prisma.ProductoInclude;
+
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly cloudinaryService: CloudinaryService,
+  ) {
+    this.include = {
+      stock: {
+        select: {
+          cantidad: true,
+        },
+      },
+    };
+  }
 
   async create(
     createProductoDto: CreateProductoDto,
+    file: Express.Multer.File,
   ): Promise<ProductoResponse> {
+    let fileUploaded!: CloudinaryResponse;
+
     const { codigo_barras, nombre, precio, descripcion, almacen } =
       createProductoDto;
 
-    if (!this.prismaService)
-      throw new BadRequestException('No es posible instanciar PRISMA PERROS');
+    if (file) {
+      const response = await this.cloudinaryService.uploadFile(file);
+
+      fileUploaded = response.image;
+    }
 
     const producto = await this.prismaService.producto.create({
       data: {
         codigo_barras,
         nombre,
-        precio,
+        precio: +precio,
+        imagen: fileUploaded
+          ? fileUploaded.secure_url
+          : 'https://res.cloudinary.com/dykizva9a/image/upload/v1784654875/producto-default_fxm3sa.png',
         descripcion,
         stock: {
           create: {
-            cantidad: almacen,
+            cantidad: +almacen,
           },
         },
       },
@@ -58,6 +84,7 @@ export class ProductoService {
     const clause: Prisma.ProductoFindManyArgs = {
       take: limit,
       skip: offset,
+      include: this.include,
     };
     const [productos, total] = await Promise.all([
       this.prismaService.producto.findMany(clause),
@@ -76,10 +103,11 @@ export class ProductoService {
   }
 
   async findOne(id: string): Promise<Producto> {
-    const producto = await this.prismaService.producto.findUnique({
+    const producto = await this.prismaService.producto.findFirst({
       where: {
-        id,
+        OR: [{ id }, { codigo_barras: id }],
       },
+      include: this.include,
     });
     if (!producto) throw new NotFoundException('No se encontro el producto');
     return producto;
@@ -102,6 +130,7 @@ export class ProductoService {
       where: {
         id,
       },
+      include: this.include,
     });
     return {
       message: 'Producto actualizado con exito',
