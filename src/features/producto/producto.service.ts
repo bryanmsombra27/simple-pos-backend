@@ -51,13 +51,13 @@ export class ProductoService {
 
     const producto = await this.prismaService.producto.create({
       data: {
-        codigo_barras,
-        nombre,
+        codigo_barras: codigo_barras.trim(),
+        nombre: nombre.toLowerCase().trim(),
         precio: +precio,
         imagen: fileUploaded
           ? fileUploaded.secure_url
           : 'https://res.cloudinary.com/dykizva9a/image/upload/v1784654875/producto-default_fxm3sa.png',
-        descripcion,
+        descripcion: descripcion?.toLowerCase(),
         stock: {
           create: {
             cantidad: +almacen,
@@ -86,16 +86,42 @@ export class ProductoService {
       skip: offset,
       include: this.include,
     };
+
+    if (paginationDto.search) {
+      const search = paginationDto.search.trim().toLowerCase();
+      clause.where = {
+        OR: [
+          {
+            nombre: {
+              contains: search,
+            },
+          },
+          {
+            descripcion: {
+              contains: search,
+            },
+          },
+          {
+            codigo_barras: {
+              contains: search,
+            },
+          },
+        ],
+      };
+    }
+
     const [productos, total] = await Promise.all([
       this.prismaService.producto.findMany(clause),
-      this.prismaService.producto.count(),
+      this.prismaService.producto.count({
+        where: clause.where,
+      }),
     ]);
     // ceil redondear hacia arriba
     const totalPages = Math.ceil(total / limit);
 
     return {
       message: 'Productos encontrados',
-      pagina: page,
+      pagina: +page,
       productos,
       total_registros: total,
       total_paginas: totalPages,
