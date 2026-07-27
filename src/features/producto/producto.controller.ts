@@ -41,11 +41,13 @@ export class ProductoController {
   }
 
   @Patch(':id')
+  @UseInterceptors(FileInterceptor('file'))
   update(
     @Param('id') id: string,
     @Body() updateProductoDto: UpdateProductoDto,
+    @UploadedFile() file: Express.Multer.File,
   ) {
-    return this.productoService.update(id, updateProductoDto);
+    return this.productoService.update(id, updateProductoDto, file);
   }
 
   @Delete(':id')

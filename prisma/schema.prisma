@@ -19,6 +19,7 @@ model Producto {
   precio Float
   nombre String
   imagen String?
+  public_image_id String? 
   descripcion String?
   codigo_barras String @unique
 
@@ -41,6 +42,7 @@ model Almacen {
 model Venta {
  id String @id @default(uuid())
  total Float
+ fecha DateTime @default(now()) 
  productos Venta_Por_Producto[]
 
 }

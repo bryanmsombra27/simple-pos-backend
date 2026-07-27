@@ -6,10 +6,12 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
 } from '@nestjs/common';
 import { OrdenesService } from './ordenes.service';
 import { CreateOrdeneDto } from './dto/create-ordene.dto';
 import { UpdateOrdeneDto } from './dto/update-ordene.dto';
+import { PaginationDto } from 'src/common/pagination.dto';
 
 @Controller('ordenes')
 export class OrdenesController {
@@ -21,13 +23,13 @@ export class OrdenesController {
   }
 
   @Get()
-  findAll() {
-    return this.ordenesService.findAll();
+  findAll(@Query() paginationDto: PaginationDto, @Query('date') date: Date) {
+    return this.ordenesService.findAll(paginationDto, date);
   }
 
   @Get(':id')
   findOne(@Param('id') id: string) {
-    return this.ordenesService.findOne(+id);
+    return this.ordenesService.findOne(id);
   }
 
   @Patch(':id')

@@ -17,6 +17,7 @@ import {
   CloudinaryResponse,
   CloudinaryService,
 } from 'src/cloudinary/cloudinary.service';
+import { CONSTANTS_DEFAULT_SETTINGS } from 'src/common/constants';
 @Injectable()
 export class ProductoService {
   private include: Prisma.ProductoInclude;
@@ -56,8 +57,11 @@ export class ProductoService {
         precio: +precio,
         imagen: fileUploaded
           ? fileUploaded.secure_url
-          : 'https://res.cloudinary.com/dykizva9a/image/upload/v1784654875/producto-default_fxm3sa.png',
+          : CONSTANTS_DEFAULT_SETTINGS.defaultImage,
         descripcion: descripcion?.toLowerCase(),
+        public_image_id: fileUploaded
+          ? fileUploaded.public_id
+          : CONSTANTS_DEFAULT_SETTINGS.publicId,
         stock: {
           create: {
             cantidad: +almacen,
@@ -142,16 +146,31 @@ export class ProductoService {
   async update(
     id: string,
     updateProductoDto: UpdateProductoDto,
+    file: Express.Multer.File,
   ): Promise<ProductoResponse> {
     const producto = await this.findOne(id);
     const { codigo_barras, descripcion, nombre, precio } = updateProductoDto;
+    let publicId: string = '';
+    let image_url: string = '';
+
+    if (file) {
+      if (producto.public_image_id != CONSTANTS_DEFAULT_SETTINGS.publicId) {
+        this.cloudinaryService.deleteFile(producto.public_image_id!);
+      }
+      const fileUploaded = await this.cloudinaryService.uploadFile(file);
+
+      publicId = fileUploaded.image.public_id;
+      image_url = fileUploaded.image.secure_url;
+    }
 
     const updatedProduct = await this.prismaService.producto.update({
       data: {
         codigo_barras: codigo_barras ?? producto.codigo_barras,
         descripcion: descripcion ?? producto.descripcion,
         nombre: nombre ?? producto.nombre,
-        precio: precio ?? producto.precio,
+        precio: precio ? +precio : producto.precio,
+        public_image_id: publicId ? publicId : producto.public_image_id,
+        imagen: image_url ? image_url : producto.imagen,
       },
       where: {
         id,

@@ -24,4 +24,18 @@ export class CloudinaryService {
       );
     }
   }
+
+  async deleteFile(publicId: string) {
+    try {
+      await cloudinary.uploader.destroy(publicId);
+
+      return {
+        message: 'recurso eliminado con exito!',
+      };
+    } catch (error) {
+      throw new BadRequestException(
+        'No fue posible eliminar la imagen del producto seleccionado',
+      );
+    }
+  }
 }
