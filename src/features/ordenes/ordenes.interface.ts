@@ -24,3 +24,4 @@ export interface VentaWithProducts extends Venta {
 export type Day = { daily: number }[];
 export type Week = { weekly: number }[];
 export type Month = { monthly: number }[];
+export type SalesCount = { total: number }[];

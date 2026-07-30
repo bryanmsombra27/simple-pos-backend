@@ -15,6 +15,7 @@ import { Prisma, Venta } from 'generated/prisma/client';
 import {
   Day,
   Month,
+  SalesCount,
   VentaFindAllResponse,
   VentaWithProducts,
   Week,
@@ -87,7 +88,7 @@ export class OrdenesService {
       0,
     );
 
-    const today = new Date().toISOString();
+    const today = new Date();
 
     const venta = await this.prismaService.venta.create({
       data: {
@@ -117,35 +118,19 @@ export class OrdenesService {
     const limit = pagination.limit ?? 10;
     const offset = (+page - 1) * limit;
 
-    const inicio = format(
-      new Date().setHours(0, 0, 0, 0),
-      'yyyy-MM-dd HH:mm:ss:sss zzzz',
-    );
-    const fin = format(
-      new Date().setHours(0, 0, 0),
-      'yyyy-MM-dd HH:mm:ss:sss zzzz',
-    );
+    const day = new Date();
 
-    const initialDateTime = subDays(new Date(inicio), 1).toISOString();
-    const finalDateTime = new Date(fin).toISOString();
-
-    const dateTime: Prisma.DateTimeFilter = {
-      gte: initialDateTime,
-      lt: finalDateTime,
-    };
-
-    const clause: Prisma.VentaFindManyArgs = {
-      where: {
-        fecha: dateTime,
-      },
-      take: limit,
-      skip: offset,
-    };
-    const [ventas, total] = await Promise.all([
-      this.prismaService.venta.findMany(clause),
-      this.prismaService.venta.count({ where: clause.where }),
+    const [ventas, count] = await Promise.all([
+      this.prismaService
+        .$queryRaw`SELECT * from "Venta" v where fecha::date = ${day}   LIMIT ${limit} OFFSET ${offset}`,
+      this.prismaService
+        .$queryRaw`SELECT COUNT(*) as total from "Venta" where fecha::date = ${day}`,
     ]);
+
     // ceil redondear hacia arriba
+    const total = Number(
+      (count as SalesCount)[0].total.toString().replace('n', ''),
+    );
     const totalPages = Math.ceil(total / limit);
 
     return {
@@ -153,7 +138,7 @@ export class OrdenesService {
       pagina: page,
       total_paginas: totalPages,
       total_registros: total,
-      ventas,
+      ventas: ventas as Venta[],
     };
   }
 
@@ -176,12 +161,12 @@ export class OrdenesService {
   }
 
   async earnings() {
-    const inicio = format(new Date().setHours(0, 0, 0, 0), 'yyyy-MM-dd zzzz');
+    // const inicio = format(new Date().setHours(0, 0, 0, 0), 'yyyy-MM-dd zzzz');
 
     // daily
-    const day = subDays(new Date(inicio), 1).toISOString();
-    const week = subDays(new Date(inicio), 8).toISOString();
-    const month = subMonths(new Date(inicio), 1).toISOString();
+    const day = new Date();
+    const week = subDays(day, 7);
+    const month = subMonths(day, 1);
 
     const [daily, weekly, monthly] = await Promise.all([
       this.prismaService
