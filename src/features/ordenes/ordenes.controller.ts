@@ -26,6 +26,10 @@ export class OrdenesController {
   findAll(@Query() paginationDto: PaginationDto, @Query('date') date: Date) {
     return this.ordenesService.findAll(paginationDto, date);
   }
+  @Get('/earnings')
+  getOrdersResults() {
+    return this.ordenesService.earnings();
+  }
 
   @Get(':id')
   findOne(@Param('id') id: string) {

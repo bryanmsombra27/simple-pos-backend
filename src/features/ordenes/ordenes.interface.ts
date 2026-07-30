@@ -21,3 +21,6 @@ export interface VentaWithProducts extends Venta {
     'id' | 'cantidad' | 'producto_id' | 'precio'
   >[];
 }
+export type Day = { daily: number }[];
+export type Week = { weekly: number }[];
+export type Month = { monthly: number }[];

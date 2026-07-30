@@ -11,8 +11,15 @@ import {
 import { UpdateOrdeneDto } from './dto/update-ordene.dto';
 import { PrismaService } from 'src/services/prisma/prisma.service';
 import { PaginationDto } from 'src/common/pagination.dto';
-import { Prisma } from 'generated/prisma/client';
-import { VentaFindAllResponse, VentaWithProducts } from './ordenes.interface';
+import { Prisma, Venta } from 'generated/prisma/client';
+import {
+  Day,
+  Month,
+  VentaFindAllResponse,
+  VentaWithProducts,
+  Week,
+} from './ordenes.interface';
+import { format, subDays, subMonths } from 'date-fns';
 
 @Injectable()
 export class OrdenesService {
@@ -80,9 +87,12 @@ export class OrdenesService {
       0,
     );
 
+    const today = new Date().toISOString();
+
     const venta = await this.prismaService.venta.create({
       data: {
         total,
+        fecha: today,
         productos: {
           createMany: {
             data: productos,
@@ -107,13 +117,26 @@ export class OrdenesService {
     const limit = pagination.limit ?? 10;
     const offset = (+page - 1) * limit;
 
+    const inicio = format(
+      new Date().setHours(0, 0, 0, 0),
+      'yyyy-MM-dd HH:mm:ss:sss zzzz',
+    );
+    const fin = format(
+      new Date().setHours(0, 0, 0),
+      'yyyy-MM-dd HH:mm:ss:sss zzzz',
+    );
+
+    const initialDateTime = subDays(new Date(inicio), 1).toISOString();
+    const finalDateTime = new Date(fin).toISOString();
+
+    const dateTime: Prisma.DateTimeFilter = {
+      gte: initialDateTime,
+      lt: finalDateTime,
+    };
+
     const clause: Prisma.VentaFindManyArgs = {
       where: {
-        fecha: Intl.DateTimeFormat('es-MX', {
-          hour: '2-digit',
-          minute: '2-digit',
-          second: '2-digit',
-        }).format(date),
+        fecha: dateTime,
       },
       take: limit,
       skip: offset,
@@ -150,5 +173,50 @@ export class OrdenesService {
 
   async remove(id: number) {
     return `This action removes a #${id} ordene`;
+  }
+
+  async earnings() {
+    const inicio = format(new Date().setHours(0, 0, 0, 0), 'yyyy-MM-dd zzzz');
+
+    // daily
+    const day = subDays(new Date(inicio), 1).toISOString();
+    const week = subDays(new Date(inicio), 8).toISOString();
+    const month = subMonths(new Date(inicio), 1).toISOString();
+
+    const [daily, weekly, monthly] = await Promise.all([
+      this.prismaService
+        .$queryRaw`select  SUM(total) AS daily  from "Venta"  where fecha::date = ${day}`,
+      this.prismaService
+        .$queryRaw`select  SUM(total) AS weekly  from "Venta"  where fecha::date BETWEEN ${week} AND ${day}`,
+      this.prismaService
+        .$queryRaw`select  SUM(total) AS monthly  from "Venta"  where fecha::date BETWEEN ${month} AND ${day}`,
+    ]);
+    const dayResult = (daily as Day)[0].daily;
+    const weekResult = (weekly as Week)[0].weekly;
+    const monthResult = (monthly as Month)[0].monthly;
+
+    return {
+      day: dayResult,
+      week: weekResult,
+      month: monthResult,
+    };
+  }
+
+  private dateTimeFilter(init: string, finish: string): Prisma.DateTimeFilter {
+    const filter: Prisma.DateTimeFilter = {
+      gte: init,
+      lt: finish,
+    };
+    return filter;
+  }
+
+  private clauseFilter(date: Prisma.DateTimeFilter<never>) {
+    const clause: Prisma.VentaFindManyArgs = {
+      where: {
+        fecha: date,
+      },
+      select: { total: true },
+    };
+    return clause;
   }
 }
