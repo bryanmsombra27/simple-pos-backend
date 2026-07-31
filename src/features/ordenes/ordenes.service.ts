@@ -6,21 +6,13 @@ import {
 import {
   CreateOrdeneDto,
   CreateOrdenPorVentaDto,
-  ProductoOrden,
 } from './dto/create-ordene.dto';
 import { UpdateOrdeneDto } from './dto/update-ordene.dto';
 import { PrismaService } from 'src/services/prisma/prisma.service';
 import { PaginationDto } from 'src/common/pagination.dto';
 import { Prisma, Venta } from 'generated/prisma/client';
-import {
-  Day,
-  Month,
-  SalesCount,
-  VentaFindAllResponse,
-  VentaWithProducts,
-  Week,
-} from './ordenes.interface';
-import { format, subDays, subMonths } from 'date-fns';
+import { VentaFindAllResponse, VentaWithProducts } from './ordenes.interface';
+import { endOfDay, startOfDay, subDays, subMonths } from 'date-fns';
 
 @Injectable()
 export class OrdenesService {
@@ -118,19 +110,38 @@ export class OrdenesService {
     const limit = pagination.limit ?? 10;
     const offset = (+page - 1) * limit;
 
-    const day = new Date();
+    const start = startOfDay(new Date());
+    const end = endOfDay(new Date());
 
-    const [ventas, count] = await Promise.all([
-      this.prismaService
-        .$queryRaw`SELECT * from "Venta" v where fecha::date = ${day}   LIMIT ${limit} OFFSET ${offset}`,
-      this.prismaService
-        .$queryRaw`SELECT COUNT(*) as total from "Venta" where fecha::date = ${day}`,
+    const fechaFilter: Prisma.DateTimeFilter = {
+      gte: start,
+      lte: end,
+    };
+
+    const clause: Prisma.VentaFindManyArgs = {
+      where: {
+        fecha: fechaFilter,
+      },
+      take: limit,
+      skip: offset,
+    };
+    const [ventas, total] = await Promise.all([
+      this.prismaService.venta.findMany(clause),
+      this.prismaService.venta.count({ where: clause.where }),
     ]);
 
+    // const [ventas, count] = await Promise.all([
+    //   this.prismaService
+    //     .$queryRaw`SELECT * from "Venta" v where fecha::date BETWEEN ${start} AND ${end}   LIMIT ${limit} OFFSET ${offset}`,
+    //   this.prismaService
+    //     .$queryRaw`SELECT COUNT(*) as total from "Venta" where fecha::date BETWEEN ${start} AND ${end}`,
+    // ]);
+
+    // const total = Number(
+    //   (count as SalesCount)[0].total.toString().replace('n', ''),
+    // );
+
     // ceil redondear hacia arriba
-    const total = Number(
-      (count as SalesCount)[0].total.toString().replace('n', ''),
-    );
     const totalPages = Math.ceil(total / limit);
 
     return {
@@ -145,7 +156,26 @@ export class OrdenesService {
   async findOne(id: string): Promise<VentaWithProducts> {
     const venta = await this.prismaService.venta.findUnique({
       where: { id },
-      include: this.include,
+      select: {
+        fecha: true,
+        id: true,
+        total: true,
+        productos: {
+          select: {
+            producto_id: true,
+            cantidad: true,
+            precio: true,
+            id: true,
+            producto: {
+              select: {
+                id: true,
+                imagen: true,
+                nombre: true,
+              },
+            },
+          },
+        },
+      },
     });
     if (!venta) throw new NotFoundException('No se encontro la venta');
 
@@ -161,24 +191,35 @@ export class OrdenesService {
   }
 
   async earnings() {
-    // const inicio = format(new Date().setHours(0, 0, 0, 0), 'yyyy-MM-dd zzzz');
+    // day
+    const startDay = startOfDay(new Date());
+    const endDay = endOfDay(new Date());
+    // week
+    const week = subDays(startDay, 7);
+    // month
+    const month = subMonths(startDay, 1);
 
-    // daily
-    const day = new Date();
-    const week = subDays(day, 7);
-    const month = subMonths(day, 1);
+    // filters
+    const dailyFilter = this.dateTimeFilter(startDay, endDay);
+    const weeklyFilter = this.dateTimeFilter(week, endDay);
+    const monthlyFilter = this.dateTimeFilter(month, endDay);
 
+    // clauses
+    const dailyClause = this.clauseFilter(dailyFilter);
+    const weeklyClause = this.clauseFilter(weeklyFilter);
+    const monthlyClause = this.clauseFilter(monthlyFilter);
+
+    // queries
     const [daily, weekly, monthly] = await Promise.all([
-      this.prismaService
-        .$queryRaw`select  SUM(total) AS daily  from "Venta"  where fecha::date = ${day}`,
-      this.prismaService
-        .$queryRaw`select  SUM(total) AS weekly  from "Venta"  where fecha::date BETWEEN ${week} AND ${day}`,
-      this.prismaService
-        .$queryRaw`select  SUM(total) AS monthly  from "Venta"  where fecha::date BETWEEN ${month} AND ${day}`,
+      this.prismaService.venta.findMany(dailyClause),
+      this.prismaService.venta.findMany(weeklyClause),
+      this.prismaService.venta.findMany(monthlyClause),
     ]);
-    const dayResult = (daily as Day)[0].daily;
-    const weekResult = (weekly as Week)[0].weekly;
-    const monthResult = (monthly as Month)[0].monthly;
+
+    //results
+    const dayResult = daily.reduce((acc, item) => acc + item.total, 0);
+    const weekResult = weekly.reduce((acc, item) => acc + item.total, 0);
+    const monthResult = monthly.reduce((acc, item) => acc + item.total, 0);
 
     return {
       day: dayResult,
@@ -186,8 +227,34 @@ export class OrdenesService {
       month: monthResult,
     };
   }
+  // async earnings() {
+  //   // const inicio = format(new Date().setHours(0, 0, 0, 0), 'yyyy-MM-dd zzzz');
 
-  private dateTimeFilter(init: string, finish: string): Prisma.DateTimeFilter {
+  //   // daily
+  //   const day = new Date();
+  //   const week = subDays(day, 7);
+  //   const month = subMonths(day, 1);
+
+  //   const [daily, weekly, monthly] = await Promise.all([
+  //     this.prismaService
+  //       .$queryRaw`select  SUM(total) AS daily  from "Venta"  where fecha::date = ${day}`,
+  //     this.prismaService
+  //       .$queryRaw`select  SUM(total) AS weekly  from "Venta"  where fecha::date BETWEEN ${week} AND ${day}`,
+  //     this.prismaService
+  //       .$queryRaw`select  SUM(total) AS monthly  from "Venta"  where fecha::date BETWEEN ${month} AND ${day}`,
+  //   ]);
+  //   const dayResult = (daily as Day)[0].daily;
+  //   const weekResult = (weekly as Week)[0].weekly;
+  //   const monthResult = (monthly as Month)[0].monthly;
+
+  //   return {
+  //     day: dayResult,
+  //     week: weekResult,
+  //     month: monthResult,
+  //   };
+  // }
+
+  private dateTimeFilter(init: Date, finish: Date): Prisma.DateTimeFilter {
     const filter: Prisma.DateTimeFilter = {
       gte: init,
       lt: finish,
@@ -200,7 +267,6 @@ export class OrdenesService {
       where: {
         fecha: date,
       },
-      select: { total: true },
     };
     return clause;
   }

@@ -16,10 +16,7 @@ export interface VentaFindAllResponse extends CommonFindAllResponse {
 }
 
 export interface VentaWithProducts extends Venta {
-  productos: Pick<
-    Venta_Por_Producto,
-    'id' | 'cantidad' | 'producto_id' | 'precio'
-  >[];
+  productos: Partial<Venta_Por_Producto> & { producto?: Partial<Producto> }[];
 }
 export type Day = { daily: number }[];
 export type Week = { weekly: number }[];
