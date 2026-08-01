@@ -11,8 +11,7 @@ import type {
 } from './producto.interface';
 import { PaginationDto } from '../../common/pagination.dto';
 import { PrismaService } from 'src/services/prisma/prisma.service';
-import { Prisma, Producto } from 'generated/prisma/client';
-import { type Express } from 'express';
+import { Prisma, type Producto } from '../../../generated/prisma/client';
 import {
   CloudinaryResponse,
   CloudinaryService,
@@ -68,6 +67,7 @@ export class ProductoService {
           },
         },
       },
+      include: this.include,
     });
     if (!producto)
       throw new BadRequestException('No fue posible crear el producto');
@@ -148,8 +148,10 @@ export class ProductoService {
     updateProductoDto: UpdateProductoDto,
     file: Express.Multer.File,
   ): Promise<ProductoResponse> {
-    const producto = await this.findOne(id);
-    const { codigo_barras, descripcion, nombre, precio } = updateProductoDto;
+    const producto = (await this.findOne(id)) as any;
+
+    const { codigo_barras, descripcion, nombre, precio, almacen } =
+      updateProductoDto;
     let publicId: string = '';
     let image_url: string = '';
 
@@ -171,6 +173,11 @@ export class ProductoService {
         precio: precio ? +precio : producto.precio,
         public_image_id: publicId ? publicId : producto.public_image_id,
         imagen: image_url ? image_url : producto.imagen,
+        stock: {
+          update: {
+            cantidad: almacen ? +almacen : producto.stock.cantidad,
+          },
+        },
       },
       where: {
         id,
